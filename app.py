@@ -2,7 +2,6 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
-from st_aggrid import AgGrid, GridOptionsBuilder
 
 # Predefined list of founder-led S&P 500 companies (based on 2025 data)
 founder_led = ['NVDA', 'TSLA', 'META', 'ABNB', 'DELL', 'CRM', 'PINS']
@@ -15,12 +14,14 @@ FORECAST_YEARS = 5  # Number of years for explicit forecast
 
 # Function to normalize high-desired metrics (higher is better)
 def normalize_high(series):
+    series = series.replace([np.inf, -np.inf], np.nan).fillna(0)  # Handle inf/nan
     if series.max() - series.min() == 0:
         return series * 0  # Avoid division by zero
     return (series - series.min()) / (series.max() - series.min()) * 10
 
 # Function to normalize low-desired metrics (lower is better)
 def normalize_low(series):
+    series = series.replace([np.inf, -np.inf], np.nan).fillna(0)  # Handle inf/nan
     if series.max() - series.min() == 0:
         return series * 0
     return 10 - normalize_high(series)
@@ -169,8 +170,10 @@ def load_data():
         score_columns = list(weights.keys())
         df['Composite Score'] = sum(df[col] * weights[col] for col in score_columns)
 
-        # Add DCF-based score (e.g., if DCF > Price, higher score)
-        df['Score DCF'] = normalize_high(np.where(df['Price'] == 0, 0, (df['DCF Value'] - df['Price']) / df['Price']))  # Handle div by zero
+        # Add DCF-based score (higher if DCF > Price)
+        relative_undervaluation = np.where(df['Price'] == 0, 0, (df['DCF Value'] - df['Price']) / df['Price'])
+        relative_undervaluation = np.nan_to_num(relative_undervaluation, nan=0, posinf=0, neginf=0)
+        df['Score DCF'] = normalize_high(pd.Series(relative_undervaluation))
 
         # Include DCF score in composite
         df['Composite Score'] += df['Score DCF'] * 0.1  # Add 10% weight for DCF; adjust as needed
@@ -179,7 +182,7 @@ def load_data():
 
 # Streamlit app
 st.title("AlphaForge Analyzer - Stock Screener")
-st.markdown("Screen S&P 500 stocks with 12 metrics, sector grouping, and DCF valuation. Click a row in the table for details.")
+st.markdown("Screen S&P 500 stocks with 12 metrics, sector grouping, and DCF valuation. Select a ticker from the dropdown for details.")
 
 # Load data
 with st.spinner('Loading data...'):
@@ -200,24 +203,14 @@ else:
     if selected_sector != "All":
         filtered_df = filtered_df[filtered_df['Sector'] == selected_sector]
 
-    # Top 10 with clickable grid
+    # Top 10 display
     st.subheader("Top 10 Stocks Overall by Composite Score")
     top_10 = filtered_df.sort_values('Composite Score', ascending=False).head(10)
-    gb = GridOptionsBuilder.from_dataframe(top_10[['Ticker', 'Sector', 'Price', 'Composite Score', 'DCF Value']])
-    gb.configure_selection('single', use_checkbox=False)
-    grid_options = gb.build()
-    grid_response = AgGrid(
-        top_10[['Ticker', 'Sector', 'Price', 'Composite Score', 'DCF Value']],
-        gridOptions=grid_options,
-        enable_enterprise_modules=False,
-        update_mode='SELECTION_CHANGED',
-        allow_unsafe_jscode=True
-    )
+    st.dataframe(top_10[['Ticker', 'Sector', 'Price', 'Composite Score', 'DCF Value']])
 
-    # Show details on click
-    selected = grid_response['selected_rows']
-    if selected:
-        selected_ticker = selected[0]['Ticker']
+    # Drill-down selectbox
+    selected_ticker = st.selectbox("Select Ticker for Details", options=["None"] + list(top_10['Ticker']))
+    if selected_ticker != "None":
         stock_data = df[df['Ticker'] == selected_ticker]
         if not stock_data.empty:
             stock = stock_data.iloc[0]
@@ -241,7 +234,7 @@ else:
             st.write(f"Composite Score: {stock['Composite Score']:.2f}")
             st.write(f"DCF Value: ${stock['DCF Value']:.2f}")
 
-    # Top by sector (basic dataframe; can add AgGrid if needed)
+    # Top by sector
     st.subheader("Top Stocks by Sector (Top 5 per Sector)")
     grouped = filtered_df.groupby('Sector')
     for sector, group in grouped:
