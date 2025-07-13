@@ -1,4 +1,4 @@
-import streamlit as st
+mport streamlit as st
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -212,7 +212,7 @@ else:
     selected_ticker = st.selectbox("Select Ticker for Details", options=["None"] + list(top_10['Ticker']))
     if selected_ticker != "None":
         stock_data = df[df['Ticker'] == selected_ticker]
-        if not stock_data.empty:
+        if len(stock_data) > 0:
             stock = stock_data.iloc[0]
             st.subheader(f"Details for {selected_ticker}")
             metrics = [
