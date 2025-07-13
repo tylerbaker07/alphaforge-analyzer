@@ -178,7 +178,7 @@ def load_data():
 
 # Streamlit app
 st.title("AlphaForge Analyzer - Stock Screener")
-st.markdown("Screen S&P 500 stocks with 12 metrics, sector grouping, and DCF valuation.")
+st.markdown("Screen S&P 500 stocks with 12 metrics, sector grouping, and DCF valuation. Click a row in the table for details.")
 
 # Load data
 with st.spinner('Loading data...'):
