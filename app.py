@@ -1,6 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+import numpy as np
 from st_aggrid import AgGrid, GridOptionsBuilder
 
 # Predefined list of founder-led S&P 500 companies (based on 2025 data)
@@ -169,7 +170,7 @@ def load_data():
         df['Composite Score'] = sum(df[col] * weights[col] for col in score_columns)
 
         # Add DCF-based score (e.g., if DCF > Price, higher score)
-        df['Score DCF'] = normalize_high((df['DCF Value'] - df['Price']) / df['Price'])  # Relative undervaluation
+        df['Score DCF'] = normalize_high(np.where(df['Price'] == 0, 0, (df['DCF Value'] - df['Price']) / df['Price']))  # Handle div by zero
 
         # Include DCF score in composite
         df['Composite Score'] += df['Score DCF'] * 0.1  # Add 10% weight for DCF; adjust as needed
