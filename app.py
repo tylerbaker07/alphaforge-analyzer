@@ -1,6 +1,7 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
+from st_aggrid import AgGrid, GridOptionsBuilder
 
 # Predefined list of founder-led S&P 500 companies (based on 2025 data)
 founder_led = ['NVDA', 'TSLA', 'META', 'ABNB', 'DELL', 'CRM', 'PINS']
@@ -198,28 +199,28 @@ else:
     if selected_sector != "All":
         filtered_df = filtered_df[filtered_df['Sector'] == selected_sector]
 
-    # Top 10
+    # Top 10 with clickable grid
     st.subheader("Top 10 Stocks Overall by Composite Score")
     top_10 = filtered_df.sort_values('Composite Score', ascending=False).head(10)
-    st.dataframe(top_10[['Ticker', 'Sector', 'Price', 'Composite Score', 'DCF Value']])
+    gb = GridOptionsBuilder.from_dataframe(top_10[['Ticker', 'Sector', 'Price', 'Composite Score', 'DCF Value']])
+    gb.configure_selection('single', use_checkbox=False)
+    grid_options = gb.build()
+    grid_response = AgGrid(
+        top_10[['Ticker', 'Sector', 'Price', 'Composite Score', 'DCF Value']],
+        gridOptions=grid_options,
+        enable_enterprise_modules=False,
+        update_mode='SELECTION_CHANGED',
+        allow_unsafe_jscode=True
+    )
 
-    # Top by sector
-    st.subheader("Top Stocks by Sector (Top 5 per Sector)")
-    grouped = filtered_df.groupby('Sector')
-    for sector, group in grouped:
-        if sector == 'Unknown':
-            continue
-        with st.expander(sector):
-            top_in_sector = group.sort_values('Composite Score', ascending=False).head(5)
-            st.dataframe(top_in_sector[['Ticker', 'Price', 'Composite Score', 'DCF Value']])
-
-    # Stock details
-    ticker_input = st.text_input("Enter Ticker for Details")
-    if ticker_input:
-        stock_data = df[df['Ticker'] == ticker_input.upper()]
+    # Show details on click
+    selected = grid_response['selected_rows']
+    if selected:
+        selected_ticker = selected[0]['Ticker']
+        stock_data = df[df['Ticker'] == selected_ticker]
         if not stock_data.empty:
             stock = stock_data.iloc[0]
-            st.subheader(f"Details for {ticker_input.upper()}")
+            st.subheader(f"Details for {selected_ticker}")
             metrics = [
                 ('Revenue Growth', f"{stock['Rev Growth']*100:.1f}%", stock['Score Rev Growth']),
                 ('EPS Growth', f"{stock['EPS Growth']*100:.1f}%", stock['Score EPS Growth']),
@@ -238,8 +239,16 @@ else:
             st.table(metrics_df)
             st.write(f"Composite Score: {stock['Composite Score']:.2f}")
             st.write(f"DCF Value: ${stock['DCF Value']:.2f}")
-        else:
-            st.error("Ticker not found.")
+
+    # Top by sector (basic dataframe; can add AgGrid if needed)
+    st.subheader("Top Stocks by Sector (Top 5 per Sector)")
+    grouped = filtered_df.groupby('Sector')
+    for sector, group in grouped:
+        if sector == 'Unknown':
+            continue
+        with st.expander(sector):
+            top_in_sector = group.sort_values('Composite Score', ascending=False).head(5)
+            st.dataframe(top_in_sector[['Ticker', 'Price', 'Composite Score', 'DCF Value']])
 
     # Exports
     csv_full = df.to_csv(index=False).encode('utf-8')
